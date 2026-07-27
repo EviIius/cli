@@ -2,7 +2,7 @@
 set -eu
 
 if [ -n "${DATABASE_URL:-}" ]; then
-  pnpm db:migrate
+  node scripts/migrate.mjs
 fi
 
 if [ -n "${PROMPTS_DIR:-}" ] && [ "$PROMPTS_DIR" != "/app/packages/prompts" ]; then
@@ -12,4 +12,4 @@ if [ -n "${PROMPTS_DIR:-}" ] && [ "$PROMPTS_DIR" != "/app/packages/prompts" ]; t
   fi
 fi
 
-exec pnpm --filter @relay/api start
+exec node services/api/dist/server.js
