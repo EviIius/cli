@@ -43,9 +43,15 @@ The console is at `http://localhost:8080`, API at `http://localhost:4100`, and J
 
 Relay includes a `render.yaml` Blueprint that deploys the web console and API as one Docker service, creates a private PostgreSQL database, runs migrations before every release, generates the authentication secret, and keeps promoted prompts on a persistent disk.
 
+### Free demo option
+
+Use `render.free.yaml` as the Blueprint path for a $0 demo deployment. It uses Render's Free web service and Free PostgreSQL plans. The free service sleeps after 15 minutes without traffic and can take about a minute to wake. The database is limited to 1 GB, expires after 30 days, and has no backups. Free services cannot attach the prompt disk, so prompt promotions reset after a restart or redeploy. With a payment card on the workspace, excess bandwidth or build minutes can still be billed; configure a workspace spend limit before deploying if zero spend is required.
+
+Use the default `render.yaml` when the service needs to stay awake, retain prompt promotions, preserve the database beyond 30 days, and support backups. Moving from the free experiment to the paid Blueprint requires migrating data or starting with a new managed database.
+
 1. Keep `.env` local. Never commit it. Hosted secrets are entered in Render, not copied into source files.
 2. Commit and push this repository to GitHub or GitLab. The `render.yaml` file must be on the branch Render deploys.
-3. Sign in at <https://dashboard.render.com>, choose **New > Blueprint**, and connect this repository.
+3. Sign in at <https://dashboard.render.com>, choose **New > Blueprint**, and connect this repository. Set the Blueprint path to `render.free.yaml` for the demo tier or leave it as `render.yaml` for persistent hosting.
 4. Review the `relay-control-plane` web service and `relay-postgres` database. The defaults use paid persistent plans; change them only after reviewing Render's durability limitations.
 5. When Render asks for `OPENAI_API_KEY`, paste the key from your local `.env`. Render generates `AUTH_SECRET` and obtains `DATABASE_URL` from the managed database automatically.
 6. Apply the Blueprint and wait until `/ready` passes. Open the generated `onrender.com` URL.

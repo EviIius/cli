@@ -4,6 +4,8 @@
 
 The root `render.yaml` is the supported single-region managed deployment. It builds the API Dockerfile with the React console embedded, provisions private PostgreSQL, runs checksummed migrations as a pre-deploy command, uses `/ready` as the health check, generates `AUTH_SECRET`, prompts for `OPENAI_API_KEY`, and mounts a persistent prompt-registry disk. Create a Blueprint from the repository in Render and complete the first-user bootstrap only after the deployment is healthy.
 
+For a disposable demo, select `render.free.yaml` as the Blueprint path. Because Render does not offer pre-deploy commands or persistent disks on Free web services, this variant runs idempotent migrations during startup and uses the image's bundled prompt registry. It will cold-start after idle periods, loses prompt-file changes on restart, and must be upgraded or migrated before its Free PostgreSQL database expires after 30 days.
+
 The hosted service deliberately sets `LOCAL_BASE_URL=disabled`: `127.0.0.1` on a cloud container is not the workstation's Ollama service. If private hosted inference is required later, deploy vLLM or Ollama inside the same private cloud network and point `LOCAL_BASE_URL` at that private endpoint.
 
 ## Local production-shaped stack
