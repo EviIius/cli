@@ -6,9 +6,6 @@ services:
     plan: starter
     dockerfilePath: ./infra/docker/api.Dockerfile
     dockerContext: .
-    dockerCommand: >-
-      sh -c 'mkdir -p /data/prompts && test -f /data/prompts/registry.json || cp -R /app/packages/prompts/. /data/prompts/; exec pnpm --filter @relay/api start'
-    preDeployCommand: pnpm db:migrate
     healthCheckPath: /ready
     autoDeployTrigger: commit
     disk:

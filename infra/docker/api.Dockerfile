@@ -19,4 +19,4 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app /app
 EXPOSE 4100
 USER node
-CMD ["pnpm", "--filter", "@relay/api", "start"]
+CMD ["sh", "scripts/start-hosted.sh"]
