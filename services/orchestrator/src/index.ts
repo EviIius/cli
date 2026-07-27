@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ChatMessage, ChatRequest, ChatResult, ModelAdapter, TenantPolicy, Trace, TraceSpan } from "@relay/contracts";
+import type { AgentDefinition, ChatMessage, ChatRequest, ChatResult, ModelAdapter, TenantPolicy, Trace, TraceSpan } from "@relay/contracts";
 import type { ToolRunner } from "@relay/tool-runner";
 import { PolicyRouter } from "./router/index.js";
 import { MemoryStore, type RelayStore } from "./store.js";
@@ -35,7 +35,7 @@ export class Orchestrator {
     throw lastError;
   }
 
-  async run(input: ChatRequest, events?: { onDelta?: (text: string) => void }): Promise<{ result: ChatResult; trace: Trace }> {
+  async run(input: ChatRequest, events?: { onDelta?: (text: string) => void; agent?: AgentDefinition }): Promise<{ result: ChatResult; trace: Trace }> {
     const traceId = randomUUID();
     const startedAt = new Date().toISOString();
     const trace: Trace = { id: traceId, tenantId: input.tenantId, sessionId: input.sessionId, startedAt, status: "running", spans: [] };
@@ -46,16 +46,20 @@ export class Orchestrator {
       await this.store.saveTrace(trace);
       const usage = await this.store.usageSummary(input.tenantId);
       if (usage.costUsd >= policy.monthlyBudgetUsd) throw new Error(`Tenant monthly budget of $${policy.monthlyBudgetUsd.toFixed(2)} has been reached`);
+      const agent = events?.agent;
+      if (agent) addSpan({ name: `agent ${agent.id}`, kind: "policy", status: "ok", attributes: { prompt: `${agent.prompt.name}@${agent.prompt.version}`, maxSteps: agent.maxSteps, tools: agent.tools.join(",") } });
       const routeStart = performance.now();
       const decisions = this.router.routes(input, policy);
       let decision = decisions[0]!;
       addSpan({ name: "select model", kind: "router", status: "ok", durationMs: performance.now() - routeStart, attributes: { adapter: decision.adapter.id, reason: decision.reason, candidates: decisions.length } });
       const messages: ChatMessage[] = [...session.messages, ...input.messages];
-      if(this.prompts&&!messages.some(message=>message.role==="system")){const prompt=await this.prompts.resolve("chat");messages.unshift({role:"system",content:prompt.content});addSpan({name:"prompt chat",kind:"policy",status:"ok",attributes:{version:prompt.version}});}
-      let request = { ...input, messages, tools: input.tools ?? this.tools.specs() };
+      if(this.prompts&&!messages.some(message=>message.role==="system")){const prompt=await this.prompts.resolve(agent?.prompt.name??"chat",agent?.prompt.version);messages.unshift({role:"system",content:prompt.content});addSpan({name:`prompt ${prompt.name}`,kind:"policy",status:"ok",attributes:{version:prompt.version}});}
+      const availableTools = this.tools.specs();
+      const agentTools = agent ? availableTools.filter((tool) => agent.tools.includes(tool.name)) : availableTools;
+      let request = { ...input, messages, tools: agent ? agentTools : input.tools ?? availableTools };
       let result: ChatResult | undefined;
       const pendingApprovals:Array<{id:string;toolName:string}>=[];
-      modelLoop: for (let step = 0; step < 4; step += 1) {
+      modelLoop: for (let step = 0; step < (agent?.maxSteps ?? 4); step += 1) {
         const modelStart = performance.now();
         let invocationError: unknown;
         for (const candidate of [decision, ...decisions.filter((item) => item.adapter.id !== decision.adapter.id)]) {
@@ -87,7 +91,7 @@ export class Orchestrator {
       trace.status = "ok";
       await this.store.saveTrace(trace);
       await this.store.addUsage({ id: randomUUID(), tenantId: input.tenantId, sessionId: input.sessionId, traceId, provider: result.provider, model: result.model, inputTokens: Math.ceil(result.usage?.inputTokens ?? 0), outputTokens: Math.ceil(result.usage?.outputTokens ?? 0), costUsd: result.usage?.costUsd ?? 0, createdAt: new Date().toISOString() });
-      await this.store.addAudit({ tenantId: input.tenantId, actorId: input.metadata?.actorId, action: "chat.completed", resourceType: "session", resourceId: input.sessionId, traceId, metadata: { provider: result.provider, model: result.model } });
+      await this.store.addAudit({ tenantId: input.tenantId, actorId: input.metadata?.actorId, action: "chat.completed", resourceType: "session", resourceId: input.sessionId, traceId, metadata: { provider: result.provider, model: result.model, agentId: agent?.id ?? "default" } });
       return { result, trace };
     } catch (error) {
       trace.status = "error";

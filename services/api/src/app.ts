@@ -25,6 +25,8 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
   const prompts=new PromptRegistry(promptRoot);
   const orchestrator = new Orchestrator(adapters, createDefaultToolRunner(), store,undefined,prompts);
   const workflows=new WorkflowEngine(orchestrator,store);
+  const loadAgents=async()=>JSON.parse(await readFile(agentsFile,"utf8")) as AgentDefinition[];
+  const selectedAgent=async(agentId?:string)=>{if(!agentId)return undefined;const agent=(await loadAgents()).find(item=>item.id===agentId);if(!agent)throw new Error(`Agent ${agentId} was not found`);return agent;};
   app.register(cors, { origin: true });
   if(env.SERVE_WEB==="true") app.register(staticFiles,{root:webRoot,wildcard:false});
   app.register(rateLimit,{global:false,max:Number(env.RATE_LIMIT_MAX??120),timeWindow:env.RATE_LIMIT_WINDOW??"1 minute",keyGenerator:(request)=>auth.verify(request.headers.authorization)?.tenantId??request.ip});
@@ -59,20 +61,22 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
     const actor=guard(request,reply,["owner","admin","builder"]); if(!actor) return;
     const parsed = chatRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Invalid chat request", details: parsed.error.flatten() });
-    try { return await orchestrator.run({ ...parsed.data, tenantId: actor.tenantId, metadata: { ...parsed.data.metadata, actorId: actor.userId } }); }
-    catch (error) { return reply.code(503).send({ error: error instanceof Error ? error.message : "Chat request failed" }); }
+    try { const agent=await selectedAgent(parsed.data.agentId);return await orchestrator.run({ ...parsed.data, tenantId: actor.tenantId, metadata: { ...parsed.data.metadata, actorId: actor.userId } },{agent}); }
+    catch (error) { const message=error instanceof Error ? error.message : "Chat request failed";return reply.code(/Agent .+ was not found/.test(message)?400:503).send({ error: message }); }
   });
 
   app.post("/v1/chat/stream", async (request, reply) => {
     const actor=guard(request,reply,["owner","admin","builder"]); if(!actor) return;
     const parsed = chatRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Invalid chat request", details: parsed.error.flatten() });
+    let agent:AgentDefinition|undefined;
+    try{agent=await selectedAgent(parsed.data.agentId);}catch(error){return reply.code(400).send({error:error instanceof Error?error.message:"Agent was not found"});}
     reply.hijack();
     reply.raw.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive", "access-control-allow-origin": "*" });
     const send = (event: string, data: unknown) => reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     try {
       send("start", { sessionId: parsed.data.sessionId });
-      const { result, trace } = await orchestrator.run({ ...parsed.data, tenantId: actor.tenantId, metadata: { ...parsed.data.metadata, actorId: actor.userId } }, { onDelta: (text) => send("delta", { text }) });
+      const { result, trace } = await orchestrator.run({ ...parsed.data, tenantId: actor.tenantId, metadata: { ...parsed.data.metadata, actorId: actor.userId } }, { onDelta: (text) => send("delta", { text }),agent });
       send("route", { provider: result.provider, model: result.model, reason: result.routeReason, traceId: result.traceId });
       send("complete", { result, trace });
     } catch (error) { send("error", { error: error instanceof Error ? error.message : "Chat request failed" }); }
@@ -89,7 +93,7 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
   app.get("/v1/tools", async (request,reply) => { const actor=guard(request,reply); return actor ? orchestrator.tools.specs() : undefined; });
   app.get("/v1/providers/status", async (request,reply) => {
     const actor=guard(request,reply,["owner","admin"]); if(!actor)return;
-    const known=[{id:"openai",configured:Boolean(env.OPENAI_API_KEY)},{id:"anthropic",configured:Boolean(env.ANTHROPIC_API_KEY)},{id:"mistral",configured:Boolean(env.MISTRAL_API_KEY)},{id:"qwen",configured:Boolean(env.QWEN_API_KEY)}];
+    const known=[{id:"openai",configured:Boolean(env.OPENAI_API_KEY)},{id:"anthropic",configured:Boolean(env.ANTHROPIC_API_KEY)},{id:"mistral",configured:Boolean(env.MISTRAL_API_KEY)},{id:"qwen",configured:Boolean(env.QWEN_API_KEY)},{id:"gemma",configured:Boolean(env.GEMMA_API_KEY&&env.GEMMA_BASE_URL)}];
     const active=await Promise.all(adapters.map(async adapter=>({id:adapter.id,provider:adapter.provider,model:adapter.model,configured:true,capabilities:adapter.capabilities,health:adapter.health?await adapter.health():{ok:true,latencyMs:0}})));
     return {providers:[...known.filter(item=>!active.some(adapter=>adapter.provider===item.id)),...active]};
   });
@@ -101,7 +105,7 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
   app.post<{Params:{id:string}}>("/v1/jobs/:id/cancel",async(request,reply)=>{const actor=guard(request,reply,["owner","admin","builder"]);if(!actor)return;try{return await workflows.cancel(request.params.id,actor.tenantId);}catch(error){return reply.code(404).send({error:error instanceof Error?error.message:"Job not found"});}});
   app.get("/v1/artifacts",async(request,reply)=>{const actor=guard(request,reply);if(!actor)return;return await store.listArtifacts(actor.tenantId,(request.query as {jobId?:string}).jobId);});
   app.post("/v1/artifacts",async(request,reply)=>{const actor=guard(request,reply,["owner","admin","builder"]);if(!actor)return;const body=request.body as {sessionId?:string;name?:string;mediaType?:string;content?:unknown};if(!body.sessionId||!body.name||!body.mediaType||body.content===undefined)return reply.code(400).send({error:"sessionId, name, mediaType, and content are required"});if(Buffer.byteLength(JSON.stringify(body.content))>750_000)return reply.code(413).send({error:"Artifact exceeds the 750 KB inline limit"});await store.session(actor.tenantId,body.sessionId);const artifact=await store.createArtifact({tenantId:actor.tenantId,sessionId:body.sessionId,name:body.name,mediaType:body.mediaType,content:body.content});await store.addAudit({tenantId:actor.tenantId,actorId:actor.userId,action:"artifact.created",resourceType:"artifact",resourceId:artifact.id,metadata:{name:artifact.name,mediaType:artifact.mediaType}});return reply.code(201).send(artifact);});
-  app.get("/v1/agents",async(request,reply)=>{const actor=guard(request,reply);if(!actor)return;try{return JSON.parse(await readFile(agentsFile,"utf8")) as AgentDefinition[];}catch(error){return reply.code(500).send({error:error instanceof Error?error.message:"Agent registry unavailable"});}});
+  app.get("/v1/agents",async(request,reply)=>{const actor=guard(request,reply);if(!actor)return;try{return await loadAgents();}catch(error){return reply.code(500).send({error:error instanceof Error?error.message:"Agent registry unavailable"});}});
   app.post<{Params:{id:string}}>("/v1/traces/:id/replay",async(request,reply)=>{const actor=guard(request,reply,["owner","admin","builder"]);if(!actor)return;const trace=await store.trace(request.params.id);if(!trace||trace.tenantId!==actor.tenantId)return reply.code(404).send({error:"Trace not found"});const session=await store.session(actor.tenantId,trace.sessionId),lastUser=[...session.messages].reverse().find(message=>message.role==="user");if(!lastUser)return reply.code(409).send({error:"Trace session has no user turn to replay"});const replaySessionId=randomUUID();const result=await orchestrator.run({tenantId:actor.tenantId,sessionId:replaySessionId,priority:"balanced",messages:[lastUser],metadata:{actorId:actor.userId,replayOf:trace.id}});await store.addAudit({tenantId:actor.tenantId,actorId:actor.userId,action:"trace.replayed",resourceType:"trace",resourceId:trace.id,traceId:result.trace.id,metadata:{replaySessionId}});return result;});
   app.get("/v1/evals",async(request,reply)=>{const actor=guard(request,reply);if(!actor)return;const artifacts=await store.listArtifacts(actor.tenantId);return artifacts.filter(item=>item.mediaType==="application/vnd.relay.eval+json").map(item=>item.content);});
   app.post("/v1/evals/run",async(request,reply)=>{const actor=guard(request,reply,["owner","admin"]);if(!actor)return;const evalOrchestrator=new Orchestrator(adaptersFromEnvironment({...env,OPENAI_API_KEY:"",ANTHROPIC_API_KEY:"",MISTRAL_API_KEY:"",QWEN_API_KEY:"",LOCAL_BASE_URL:"disabled"}),createDefaultToolRunner());const report=await runEvalDataset(evalOrchestrator,resolve(evalDataset));await store.createArtifact({tenantId:actor.tenantId,name:`eval-${report.id}.json`,mediaType:"application/vnd.relay.eval+json",content:report});await store.addAudit({tenantId:actor.tenantId,actorId:actor.userId,action:"eval.completed",resourceType:"eval",resourceId:report.id,metadata:{passRate:report.passRate,passed:report.passed,failed:report.failed}});return report;});

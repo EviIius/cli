@@ -58,3 +58,13 @@ The one-shot pull service downloads the configured model before the API starts. 
 ## Production vLLM
 
 On a Linux NVIDIA host, use the `local-model` Compose profile or Kubernetes deployment to expose vLLM's OpenAI-compatible server. Set `LOCAL_BASE_URL` to that server and `LOCAL_MODEL` to its served model ID. Gated Hugging Face models additionally require `HF_TOKEN` and acceptance of their model license.
+
+## Hosted open-weight endpoints
+
+Keep Relay on Render and run GPU inference separately. Any provider that exposes an OpenAI-compatible `/v1` endpoint can connect without placing model weights on Render:
+
+- Qwen: set `QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`, and `QWEN_SELF_HOSTED=true`.
+- Mistral: set `MISTRAL_API_KEY`, `MISTRAL_BASE_URL`, `MISTRAL_MODEL`, and `MISTRAL_SELF_HOSTED=true`.
+- Gemma 4: set `GEMMA_API_KEY`, `GEMMA_BASE_URL`, `GEMMA_MODEL`, and `GEMMA_SELF_HOSTED=true`.
+
+Runpod Serverless vLLM endpoints use a base URL shaped like `https://api.runpod.ai/v2/ENDPOINT_ID/openai/v1`. Hugging Face Inference Endpoints can also run vLLM and scale to zero. Each model normally has its own endpoint; add the corresponding variables to Render's Environment page and redeploy Relay. Never put an endpoint key in `render.yaml` or commit it to `.env.example`.

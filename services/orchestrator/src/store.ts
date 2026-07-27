@@ -34,7 +34,7 @@ export interface RelayStore {
 
 const defaultPolicy = (tenantId: string): TenantPolicy => ({
   tenantId,
-  allowedProviders: ["openai", "anthropic", "mistral", "qwen", "meta", "local", "demo"],
+  allowedProviders: ["openai", "anthropic", "mistral", "qwen", "gemma", "meta", "local", "demo"],
   externalProvidersAllowed: true,
   monthlyBudgetUsd: 100,
   writeToolsRequireApproval: true

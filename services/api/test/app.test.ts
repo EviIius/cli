@@ -21,6 +21,17 @@ test("chat endpoint executes the complete demo route", async () => {
   await app.close();
 });
 
+test("chat applies registered agents and rejects unknown agent ids", async () => {
+  const app = createApp({ LOCAL_BASE_URL:"disabled", OPENAI_API_KEY:"", LOG_LEVEL:"silent" });
+  const selected = await app.inject({ method:"POST", url:"/v1/chat", payload:{ tenantId:"test", sessionId:"agent-session", agentId:"planner-reviewer", priority:"deep", messages:[{ role:"user", content:"hello" }] } });
+  assert.equal(selected.statusCode, 200);
+  assert.ok(selected.json().trace.spans.some((span:{name:string})=>span.name==="agent planner-reviewer"));
+  const unknown = await app.inject({ method:"POST", url:"/v1/chat", payload:{ tenantId:"test", sessionId:"unknown-agent-session", agentId:"missing", priority:"balanced", messages:[{ role:"user", content:"hello" }] } });
+  assert.equal(unknown.statusCode, 400);
+  assert.match(unknown.json().error, /Agent missing was not found/);
+  await app.close();
+});
+
 test("required auth supports bootstrap and denies unauthenticated tenant access", async()=>{
   const app=createApp({AUTH_MODE:"required",AUTH_SECRET:"a-test-secret-that-is-definitely-long-enough",LOCAL_BASE_URL:"disabled",OPENAI_API_KEY:"",LOG_LEVEL:"silent"});
   const denied=await app.inject({method:"GET",url:"/v1/auth/me"}); assert.equal(denied.statusCode,401);

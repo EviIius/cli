@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { toolSpecSchema } from "./tools.js";
 
-export const providerSchema = z.enum(["openai", "anthropic", "mistral", "qwen", "meta", "local", "demo"]);
+export const providerSchema = z.enum(["openai", "anthropic", "mistral", "qwen", "gemma", "meta", "local", "demo"]);
 export type Provider = z.infer<typeof providerSchema>;
 
 export const messageSchema = z.object({
@@ -16,6 +16,7 @@ export type ChatMessage = z.infer<typeof messageSchema>;
 export const chatRequestSchema = z.object({
   tenantId: z.string().min(1),
   sessionId: z.string().min(1),
+  agentId: z.string().min(1).optional(),
   modelHint: z.string().optional(),
   priority: z.enum(["fast", "balanced", "deep", "private"]).default("balanced"),
   messages: z.array(messageSchema).min(1),

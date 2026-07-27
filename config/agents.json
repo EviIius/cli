@@ -9,7 +9,7 @@
   },
   {
     "id": "planner-reviewer",
-    "name": "Planner → executor → reviewer",
+    "name": "Planner · executor · reviewer",
     "prompt": { "name": "chat", "version": "production" },
     "priority": "deep",
     "tools": ["get_incident_status"],
