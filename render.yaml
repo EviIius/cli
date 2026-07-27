@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: relay-control-plane
+    runtime: docker
+    region: virginia
+    plan: starter
+    dockerfilePath: ./infra/docker/api.Dockerfile
+    dockerContext: .
+    dockerCommand: >-
+      sh -c 'mkdir -p /data/prompts && test -f /data/prompts/registry.json || cp -R /app/packages/prompts/. /data/prompts/; exec pnpm --filter @relay/api start'
+    preDeployCommand: pnpm db:migrate
+    healthCheckPath: /ready
+    autoDeployTrigger: commit
+    disk:
+      name: relay-prompts
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_WEB
+        value: "true"
+      - key: PROMPTS_DIR
+        value: /data/prompts
+      - key: AUTH_MODE
+        value: required
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: relay-postgres
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LOCAL_BASE_URL
+        value: disabled
+      - key: OTEL_SDK_DISABLED
+        value: "true"
+      - key: RATE_LIMIT_MAX
+        value: "120"
+      - key: RATE_LIMIT_WINDOW
+        value: 1 minute
+
+databases:
+  - name: relay-postgres
+    region: virginia
+    plan: basic-256mb
+    databaseName: relay
+    user: relay
+    ipAllowList: []

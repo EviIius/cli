@@ -1,0 +1,2 @@
+{"id":"basic-chat","input":"Reply with exactly EVAL_BASIC_OK","priority":"fast","modelHint":"demo:relay","expect":{"contains":"EVAL_BASIC_OK"}}
+{"id":"incident-tool","input":"Check incident ABC-123","priority":"balanced","modelHint":"demo:relay","expect":{"contains":"Incident ABC-123 is"}}

@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { ModelAdapter } from "@relay/contracts";
+import { Orchestrator } from "@relay/orchestrator";
+import { ToolRunner } from "@relay/tool-runner";
+import { WorkflowEngine } from "../src/index.js";
+
+test("planner-reviewer jobs checkpoint and create an artifact",async()=>{const adapter:ModelAdapter={id:"demo:relay",provider:"demo",model:"worker",capabilities:{tools:true,structuredOutput:true,streaming:false,selfHosted:true},estimatedInputCostPerMillion:0,estimatedOutputCostPerMillion:0,supports:()=>true,invoke:async(request)=>({provider:"demo",model:"worker",outputText:`answer-${request.messages.length}`,traceId:"provider"})};const orchestrator=new Orchestrator([adapter],new ToolRunner());const engine=new WorkflowEngine(orchestrator,orchestrator.store);const job=await engine.submit("tenant","actor","planner-reviewer",{objective:"Build a test",priority:"private"});await engine.execute(job.id);const completed=await orchestrator.store.job(job.id);assert.equal(completed?.status,"succeeded");assert.equal((await orchestrator.store.listArtifacts("tenant",job.id)).length,1);});
+
+test("startup recovery claims and completes queued jobs exactly once",async()=>{let invocations=0;const adapter:ModelAdapter={id:"demo:relay",provider:"demo",model:"worker",capabilities:{tools:true,structuredOutput:true,streaming:false,selfHosted:true},estimatedInputCostPerMillion:0,estimatedOutputCostPerMillion:0,supports:()=>true,invoke:async()=>{invocations+=1;return{provider:"demo",model:"worker",outputText:"recovered",traceId:"provider"};}};const orchestrator=new Orchestrator([adapter],new ToolRunner());const queued=await orchestrator.store.createJob({tenantId:"tenant",actorId:"actor",type:"single",input:{objective:"Recover this",priority:"private"}});const engine=new WorkflowEngine(orchestrator,orchestrator.store);await Promise.all([engine.recoverAll(),engine.recoverAll()]);assert.equal((await orchestrator.store.job(queued.id))?.status,"succeeded");assert.equal(invocations,1);});

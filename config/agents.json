@@ -1,0 +1,18 @@
+[
+  {
+    "id": "single-chat",
+    "name": "Single-agent chat",
+    "prompt": { "name": "chat", "version": "production" },
+    "priority": "balanced",
+    "tools": ["get_incident_status"],
+    "maxSteps": 4
+  },
+  {
+    "id": "planner-reviewer",
+    "name": "Planner → executor → reviewer",
+    "prompt": { "name": "chat", "version": "production" },
+    "priority": "deep",
+    "tools": ["get_incident_status"],
+    "maxSteps": 12
+  }
+]

@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: relay-web, namespace: relay }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: relay-web } }
+  template:
+    metadata: { labels: { app: relay-web } }
+    spec:
+      containers:
+        - name: web
+          image: relay-web:latest
+          ports: [{ containerPort: 80 }]
+          readinessProbe:
+            { httpGet: { path: /, port: 80 }, initialDelaySeconds: 3 }
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: relay-web, namespace: relay }
+spec:
+  selector: { app: relay-web }
+  ports: [{ port: 80, targetPort: 80 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: relay
+  namespace: relay
+  annotations: { nginx.ingress.kubernetes.io/proxy-read-timeout: "180" }
+spec:
+  rules:
+    - host: relay.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: relay-web, port: { number: 80 } } }

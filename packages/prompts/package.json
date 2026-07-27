@@ -1,0 +1,1 @@
+{ "name": "@relay/prompts", "version": "0.1.0", "private": true, "scripts": { "build": "node -e \"\"", "typecheck": "node -e \"\"", "test": "node --test", "clean": "node -e \"\"" } }

@@ -1,0 +1,10 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import type { Orchestrator } from "@relay/orchestrator";
+
+export type EvalCase={id:string;input:string;priority?:"fast"|"balanced"|"deep"|"private";modelHint?:string;expect:{contains?:string;equals?:string;pattern?:string}};
+export type EvalResult={id:string;passed:boolean;output:string;latencyMs:number;traceId?:string;reason?:string};
+export type EvalReport={id:string;createdAt:string;passed:number;failed:number;passRate:number;results:EvalResult[]};
+
+export async function runEvalDataset(orchestrator:Orchestrator,datasetPath:string,reportPath?:string):Promise<EvalReport>{const lines=(await readFile(datasetPath,"utf8")).split(/\r?\n/).filter(line=>line.trim()&&!line.trim().startsWith("#"));const cases=lines.map(line=>JSON.parse(line) as EvalCase);const results:EvalResult[]=[];for(const item of cases){const started=performance.now();try{const response=await orchestrator.run({tenantId:"eval-tenant",sessionId:randomUUID(),priority:item.priority??"balanced",modelHint:item.modelHint,messages:[{role:"user",content:item.input}]});const output=response.result.outputText??"";const passed=item.expect.equals!==undefined?output.trim()===item.expect.equals:item.expect.contains!==undefined?output.includes(item.expect.contains):item.expect.pattern!==undefined?new RegExp(item.expect.pattern).test(output):false;results.push({id:item.id,passed,output,latencyMs:performance.now()-started,traceId:response.trace.id,reason:passed?undefined:"Output did not satisfy the rubric"});}catch(error){results.push({id:item.id,passed:false,output:"",latencyMs:performance.now()-started,reason:error instanceof Error?error.message:"Evaluation failed"});}}const passed=results.filter(item=>item.passed).length;const report:EvalReport={id:randomUUID(),createdAt:new Date().toISOString(),passed,failed:results.length-passed,passRate:results.length?passed/results.length:0,results};if(reportPath){await mkdir(dirname(reportPath),{recursive:true});await writeFile(reportPath,`${JSON.stringify(report,null,2)}\n`,"utf8");}return report;}
