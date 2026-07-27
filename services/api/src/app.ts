@@ -30,10 +30,12 @@ export function createApp(env: NodeJS.ProcessEnv = process.env) {
   app.register(rateLimit,{global:false,max:Number(env.RATE_LIMIT_MAX??120),timeWindow:env.RATE_LIMIT_WINDOW??"1 minute",keyGenerator:(request)=>auth.verify(request.headers.authorization)?.tenantId??request.ip});
   let checkRateLimit: ReturnType<typeof app.createRateLimit> | undefined;
   app.addHook("onRequest",async(request,reply)=>{
+    if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return;
     checkRateLimit??=app.createRateLimit();
     const limit=await checkRateLimit(request);
     if(!limit.isAllowed&&limit.isExceeded){
-      reply.header("retry-after",limit.ttlInSeconds).code(429).send({error:"Rate limit exceeded"});
+      const retryAfterSeconds=Math.max(1,Math.ceil(limit.ttlInSeconds));
+      reply.header("retry-after",retryAfterSeconds).code(429).send({error:`Too many write requests. Try again in ${retryAfterSeconds} seconds.`,code:"rate_limit_exceeded",retryAfterSeconds});
     }
   });
   app.addHook("onClose", async () => { await Promise.all([store.close(), auth.close()]); });
