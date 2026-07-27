@@ -1,5 +1,17 @@
 {
   "chat": {
     "production": "001"
+  },
+  "research": {
+    "production": "001"
+  },
+  "analyst": {
+    "production": "001"
+  },
+  "code-review": {
+    "production": "001"
+  },
+  "incident": {
+    "production": "001"
   }
 }

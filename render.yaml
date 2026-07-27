@@ -31,6 +31,8 @@ services:
           property: connectionString
       - key: OPENAI_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       - key: LOCAL_BASE_URL
         value: disabled
       - key: OTEL_SDK_DISABLED

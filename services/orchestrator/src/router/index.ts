@@ -3,9 +3,9 @@ import type { ChatRequest, ModelAdapter, TenantPolicy } from "@relay/contracts";
 export type RouteDecision = { adapter: ModelAdapter; reason: string; considered: string[] };
 
 const laneCandidates: Record<ChatRequest["priority"], string[]> = {
-  fast: ["openai:fast", "mistral:balanced", "local:qwen3-8b", "demo:relay"],
-  balanced: ["openai:balanced", "anthropic:balanced", "mistral:balanced", "qwen:balanced", "local:qwen3-8b", "demo:relay"],
-  deep: ["openai:deep", "anthropic:balanced", "qwen:balanced", "openai:balanced", "mistral:balanced", "local:qwen3-8b", "demo:relay"],
+  fast: ["openai:fast", "gemini:fast", "mistral:balanced", "local:qwen3-8b", "demo:relay"],
+  balanced: ["openai:balanced", "gemini:balanced", "anthropic:balanced", "mistral:balanced", "qwen:balanced", "local:qwen3-8b", "demo:relay"],
+  deep: ["openai:deep", "gemini:balanced", "anthropic:balanced", "qwen:balanced", "openai:balanced", "mistral:balanced", "local:qwen3-8b", "demo:relay"],
   private: ["local:qwen3-8b", "demo:relay"]
 };
 

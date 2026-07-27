@@ -21,6 +21,16 @@ Relay uses the Responses API. Its default lanes are `gpt-5.6-luna` for fast traf
 
 The default is the pinned `claude-sonnet-5` model ID.
 
+## Google Gemini
+
+1. Open <https://aistudio.google.com/apikey> and sign in with the Google account that owns the API project.
+2. Select **Create API key**, choose the intended Google Cloud project, and create the key.
+3. Copy `.env.example` to `.env` if needed, then set `GEMINI_API_KEY` in `.env`. Do not add quotation marks or commit the file.
+4. Leave `GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` unless Google changes its official OpenAI-compatible endpoint.
+5. Run `pnpm providers:verify`, followed by `pnpm providers:verify -- --live` for one minimal billable completion.
+
+Relay exposes `gemini-3.5-flash-lite` as the fast route and `gemini-3.6-flash` as the balanced route by default. Override them with `GEMINI_FAST_MODEL` and `GEMINI_MODEL` if the API project does not have access to those IDs.
+
 ## Mistral
 
 1. Activate Mistral Studio and open <https://console.mistral.ai/api-keys/>.

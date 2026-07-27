@@ -9,10 +9,42 @@
   },
   {
     "id": "planner-reviewer",
-    "name": "Planner · executor · reviewer",
+    "name": "Planner, executor, reviewer",
     "prompt": { "name": "chat", "version": "production" },
     "priority": "deep",
     "tools": ["get_incident_status"],
     "maxSteps": 12
+  },
+  {
+    "id": "research-analyst",
+    "name": "Research analyst",
+    "prompt": { "name": "research", "version": "production" },
+    "priority": "deep",
+    "tools": ["get_incident_status"],
+    "maxSteps": 8
+  },
+  {
+    "id": "data-analyst",
+    "name": "Data analyst",
+    "prompt": { "name": "analyst", "version": "production" },
+    "priority": "balanced",
+    "tools": [],
+    "maxSteps": 6
+  },
+  {
+    "id": "code-reviewer",
+    "name": "Code reviewer",
+    "prompt": { "name": "code-review", "version": "production" },
+    "priority": "deep",
+    "tools": [],
+    "maxSteps": 8
+  },
+  {
+    "id": "incident-commander",
+    "name": "Incident commander",
+    "prompt": { "name": "incident", "version": "production" },
+    "priority": "fast",
+    "tools": ["get_incident_status"],
+    "maxSteps": 6
   }
 ]

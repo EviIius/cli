@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { toolSpecSchema } from "./tools.js";
 
-export const providerSchema = z.enum(["openai", "anthropic", "mistral", "qwen", "gemma", "meta", "local", "demo"]);
+export const providerSchema = z.enum(["openai", "anthropic", "mistral", "qwen", "gemini", "gemma", "meta", "local", "demo"]);
 export type Provider = z.infer<typeof providerSchema>;
 
 export const messageSchema = z.object({

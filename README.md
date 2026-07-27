@@ -53,12 +53,12 @@ Use the default `render.yaml` when the service needs to stay awake, retain promp
 2. Commit and push this repository to GitHub or GitLab. The `render.yaml` file must be on the branch Render deploys.
 3. Sign in at <https://dashboard.render.com>, choose **New > Blueprint**, and connect this repository. Set the Blueprint path to `render.free.yaml` for the demo tier or leave it as `render.yaml` for persistent hosting.
 4. Review the `relay-control-plane` web service and `relay-postgres` database. The defaults use paid persistent plans; change them only after reviewing Render's durability limitations.
-5. When Render asks for `OPENAI_API_KEY`, paste the key from your local `.env`. Render generates `AUTH_SECRET` and obtains `DATABASE_URL` from the managed database automatically.
+5. When Render asks for provider secrets, paste `OPENAI_API_KEY` and/or `GEMINI_API_KEY` from your local `.env`. Render generates `AUTH_SECRET` and obtains `DATABASE_URL` from the managed database automatically.
 6. Apply the Blueprint and wait until `/ready` passes. Open the generated `onrender.com` URL.
 7. On the first visit, create the owner account and tenant. Store that password in a password manager; bootstrap closes after the first account is created.
 8. Send a test message, then verify Sessions, Traces, Usage, and Models. Add a custom domain in Render only after this test succeeds.
 
-Do not upload the complete `.env` file to Render: it contains local-only values such as the localhost model address. Add additional Anthropic, Mistral, or Qwen keys individually in the service's Environment page.
+Do not upload the complete `.env` file to Render: it contains local-only values such as the localhost model address. Add Gemini, Anthropic, Mistral, or Qwen keys individually in the service's Environment page. Gemini key creation and verification steps are in [docs/providers.md](docs/providers.md#google-gemini).
 
 ## Local failover when the hosted service is unavailable
 

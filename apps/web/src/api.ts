@@ -6,7 +6,8 @@ export type Usage = { requests: number; inputTokens: number; outputTokens: numbe
 export type Route = { provider: string; model: string; reason: string; traceId: string };
 export type Session = { id: string; tenantId: string; createdAt: string; updatedAt: string; messages: Message[] };
 export type Approval = { id: string; sessionId: string; traceId: string; toolName: string; input: unknown; status: "pending" | "approved" | "rejected"; requestedAt: string; resolvedAt?: string; reason?: string };
-export type Job = { id: string; type: "single" | "planner-reviewer"; status: string; input: Record<string, unknown>; state: Record<string, unknown>; result?: { output?: string; artifactId?: string }; error?: string; createdAt: string; updatedAt: string };
+export type WorkflowStep = { id: string; name: string; prompt: string; modelHint?: string };
+export type Job = { id: string; type: "single" | "planner-reviewer" | "adhoc"; status: string; input: Record<string, unknown>; state: Record<string, unknown>; result?: { output?: string; artifactId?: string }; error?: string; createdAt: string; updatedAt: string };
 export type Prompt = { name: string; versions: string[]; aliases: Record<string, string> };
 export type ProviderStatus = { id: string; provider?: string; model?: string; configured: boolean; capabilities?: { tools: boolean; structuredOutput: boolean; streaming: boolean; selfHosted: boolean }; health?: { ok: boolean; latencyMs: number; error?: string } };
 export type AuditEvent = { id: string; action: string; resourceType: string; resourceId?: string; actorId?: string; createdAt: string };
@@ -35,9 +36,9 @@ export async function bootstrap(email: string, password: string, name: string, t
 export function logout() { setAuth(null); }
 const tenantPath = (suffix: string) => { if (!principal) throw new Error("Authentication has not initialized"); return `/v1/tenants/${principal.tenantId}${suffix}`; };
 
-export async function streamChat(sessionId: string, message: string, priority: string, agentId: string | undefined, handlers: { route: (route: Route) => void; delta: (text: string) => void; approval?: (ids: string[]) => void }): Promise<void> {
+export async function streamChat(sessionId: string, message: string, priority: string, agentId: string | undefined, modelHint: string | undefined, handlers: { route: (route: Route) => void; delta: (text: string) => void; approval?: (ids: string[]) => void }): Promise<void> {
   if (!principal) throw new Error("Authentication has not initialized");
-  const response = await fetch("/v1/chat/stream", { method: "POST", headers: headers(true), body: JSON.stringify({ tenantId: principal.tenantId, sessionId, priority, agentId, messages: [{ role: "user", content: message }] }) });
+  const response = await fetch("/v1/chat/stream", { method: "POST", headers: headers(true), body: JSON.stringify({ tenantId: principal.tenantId, sessionId, priority, agentId, modelHint, messages: [{ role: "user", content: message }] }) });
   if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({})) as { error?: string }).error ?? `Request failed (${response.status})`);
   const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = "";
   while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); const frames = buffer.split("\n\n"); buffer = frames.pop() ?? ""; for (const frame of frames) { const event = frame.match(/^event: (.+)$/m)?.[1], raw = frame.match(/^data: (.+)$/m)?.[1]; if (!event || !raw) continue; const data = JSON.parse(raw); if (event === "route") handlers.route(data); if (event === "delta") handlers.delta(data.text); if (event === "complete" && data.result?.pendingApprovals) handlers.approval?.(data.result.pendingApprovals.map((item: { id: string }) => item.id)); if (event === "error") throw new Error(data.error); } }
@@ -50,6 +51,7 @@ export const getApprovals = () => request<Approval[]>("/v1/approvals");
 export const resolveApproval = (id: string, status: "approved" | "rejected", reason?: string) => request(`/v1/approvals/${id}/resolve`, { method: "POST", body: JSON.stringify({ status, reason }) });
 export const getJobs = () => request<Job[]>("/v1/jobs");
 export const createJob = (objective: string, type: Job["type"], priority: string) => request<Job>("/v1/jobs", { method: "POST", body: JSON.stringify({ objective, type, priority }) });
+export const createAdhocJob = (objective: string, steps: WorkflowStep[]) => request<Job>("/v1/jobs", { method: "POST", body: JSON.stringify({ objective, type: "adhoc", priority: "deep", steps }) });
 export const cancelJob = (id: string) => request<Job>(`/v1/jobs/${id}/cancel`, { method: "POST" });
 export const getPrompts = () => request<Prompt[]>("/v1/prompts");
 export const promotePrompt = (name: string, version: string) => request("/v1/prompts/promote", { method: "POST", body: JSON.stringify({ name, version, channel: "production" }) });
