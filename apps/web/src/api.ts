@@ -10,11 +10,11 @@ export type WorkflowStep = { id: string; name: string; prompt: string; modelHint
 export type Job = { id: string; type: "single" | "planner-reviewer" | "adhoc"; status: string; input: Record<string, unknown>; state: Record<string, unknown>; result?: { output?: string; artifactId?: string }; error?: string; createdAt: string; updatedAt: string };
 export type Prompt = { name: string; versions: string[]; aliases: Record<string, string> };
 export type ProviderStatus = { id: string; provider?: string; model?: string; configured: boolean; capabilities?: { tools: boolean; structuredOutput: boolean; streaming: boolean; selfHosted: boolean }; health?: { ok: boolean; latencyMs: number; error?: string } };
-export type AuditEvent = { id: string; action: string; resourceType: string; resourceId?: string; actorId?: string; createdAt: string };
+export type AuditEvent = { id: string; tenantId: string; action: string; resourceType: string; resourceId?: string; actorId?: string; traceId?: string; metadata: Record<string, unknown>; createdAt: string };
 export type Policy = { tenantId: string; allowedProviders: string[]; allowedModels?: string[]; externalProvidersAllowed: boolean; monthlyBudgetUsd: number; writeToolsRequireApproval: boolean };
 export type Agent = { id: string; name: string; prompt: { name: string; version: string }; priority: string; tools: string[]; maxSteps: number };
 export type EvalReport = { id: string; createdAt: string; passed: number; failed: number; passRate: number; results: Array<{ id: string; passed: boolean; output: string; latencyMs: number; reason?: string }> };
-export type Artifact = { id: string; sessionId?: string; name: string; mediaType: string; content: unknown; sizeBytes: number; createdAt: string };
+export type Artifact = { id: string; jobId?: string; sessionId?: string; name: string; mediaType: string; content: unknown; sizeBytes: number; createdAt: string };
 
 let token = "";
 try { token = globalThis.sessionStorage?.getItem("relay.token") ?? ""; } catch { token = ""; }
@@ -50,6 +50,7 @@ export const getSession = (id: string) => request<Session>(tenantPath(`/sessions
 export const getApprovals = () => request<Approval[]>("/v1/approvals");
 export const resolveApproval = (id: string, status: "approved" | "rejected", reason?: string) => request(`/v1/approvals/${id}/resolve`, { method: "POST", body: JSON.stringify({ status, reason }) });
 export const getJobs = () => request<Job[]>("/v1/jobs");
+export const getJob = (id: string) => request<Job>(`/v1/jobs/${id}`);
 export const createJob = (objective: string, type: Job["type"], priority: string) => request<Job>("/v1/jobs", { method: "POST", body: JSON.stringify({ objective, type, priority }) });
 export const createAdhocJob = (objective: string, steps: WorkflowStep[]) => request<Job>("/v1/jobs", { method: "POST", body: JSON.stringify({ objective, type: "adhoc", priority: "deep", steps }) });
 export const cancelJob = (id: string) => request<Job>(`/v1/jobs/${id}/cancel`, { method: "POST" });
@@ -63,3 +64,4 @@ export const getEvals = () => request<EvalReport[]>("/v1/evals");
 export const runEval = () => request<EvalReport>("/v1/evals/run", { method: "POST" });
 export const replayTrace = (id: string) => request<{ result: { outputText?: string }; trace: Trace }>(`/v1/traces/${id}/replay`, { method: "POST" });
 export const uploadArtifact = (sessionId: string, name: string, mediaType: string, content: unknown) => request<Artifact>("/v1/artifacts", { method: "POST", body: JSON.stringify({ sessionId, name, mediaType, content }) });
+export const getArtifacts = () => request<Artifact[]>("/v1/artifacts");

@@ -52,14 +52,16 @@ export class WorkflowEngine {
         let previous = "";
         const outputs: Array<WorkflowStep & { output: string }> = [];
         for (const [index, step] of (input.steps ?? []).entries()) {
+          job = await this.store.updateJob(id, { state: { ...job.state, stage: `running step ${index + 1} of ${input.steps!.length}`, currentStepId: step.id, currentStepName: step.name, sessionId, stepOutputs: outputs } });
           const context = previous ? `\n\nOutput from the previous workflow step:\n${previous}` : "";
           previous = await ask(`${step.prompt}\n\nWorkflow objective:\n${input.objective}${context}`, step.modelHint);
           outputs.push({ ...step, output: previous });
-          job = await this.store.updateJob(id, { state: { ...job.state, stage: `step ${index + 1} of ${input.steps!.length}`, sessionId, stepOutputs: outputs } });
+          job = await this.store.updateJob(id, { state: { ...job.state, stage: `completed step ${index + 1} of ${input.steps!.length}`, currentStepId: "", currentStepName: "", sessionId, stepOutputs: outputs } });
         }
         final = previous;
       }
       const artifact = await this.store.createArtifact({ tenantId: job.tenantId, jobId: job.id, sessionId, name: "result.md", mediaType: "text/markdown", content: final });
+      await this.store.addAudit({ tenantId: job.tenantId, actorId: job.actorId, action: "artifact.created", resourceType: "artifact", resourceId: artifact.id, metadata: { name: artifact.name, mediaType: artifact.mediaType, jobId: job.id } });
       await this.store.updateJob(id, { status: "succeeded", result: { artifactId: artifact.id, output: final } });
       await this.store.addAudit({ tenantId: job.tenantId, actorId: job.actorId, action: "job.succeeded", resourceType: "job", resourceId: id, metadata: { type: job.type } });
     } catch (error) {
