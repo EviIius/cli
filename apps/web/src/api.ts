@@ -9,6 +9,7 @@ export type Approval = { id: string; sessionId: string; traceId: string; toolNam
 export type WorkflowStep = { id: string; name: string; prompt: string; modelHint?: string };
 export type Job = { id: string; type: "single" | "planner-reviewer" | "adhoc"; status: string; input: Record<string, unknown>; state: Record<string, unknown>; result?: { output?: string; artifactId?: string }; error?: string; createdAt: string; updatedAt: string };
 export type Prompt = { name: string; versions: string[]; aliases: Record<string, string> };
+export type PromptVersion = { name: string; version: string; content: string };
 export type ProviderStatus = { id: string; provider?: string; model?: string; configured: boolean; capabilities?: { tools: boolean; structuredOutput: boolean; streaming: boolean; selfHosted: boolean }; health?: { ok: boolean; latencyMs: number; error?: string } };
 export type AuditEvent = { id: string; tenantId: string; action: string; resourceType: string; resourceId?: string; actorId?: string; traceId?: string; metadata: Record<string, unknown>; createdAt: string };
 export type Policy = { tenantId: string; allowedProviders: string[]; allowedModels?: string[]; externalProvidersAllowed: boolean; monthlyBudgetUsd: number; writeToolsRequireApproval: boolean };
@@ -55,6 +56,7 @@ export const createJob = (objective: string, type: Job["type"], priority: string
 export const createAdhocJob = (objective: string, steps: WorkflowStep[]) => request<Job>("/v1/jobs", { method: "POST", body: JSON.stringify({ objective, type: "adhoc", priority: "deep", steps }) });
 export const cancelJob = (id: string) => request<Job>(`/v1/jobs/${id}/cancel`, { method: "POST" });
 export const getPrompts = () => request<Prompt[]>("/v1/prompts");
+export const getPrompt = (name: string, version: string) => request<PromptVersion>(`/v1/prompts/${encodeURIComponent(name)}/${encodeURIComponent(version)}`);
 export const promotePrompt = (name: string, version: string) => request("/v1/prompts/promote", { method: "POST", body: JSON.stringify({ name, version, channel: "production" }) });
 export const getProviders = () => request<{ providers: ProviderStatus[] }>("/v1/providers/status");
 export const getAudit = () => request<AuditEvent[]>(tenantPath("/audit"));

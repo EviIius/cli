@@ -50,6 +50,7 @@ test("control-plane endpoints expose sessions, providers, prompts, and completed
   const sessions=await app.inject({method:"GET",url:`/v1/tenants/${tenantId}/sessions`});assert.equal(sessions.statusCode,200);assert.equal(sessions.json()[0].id,sessionId);
   const providers=await app.inject({method:"GET",url:"/v1/providers/status"});assert.equal(providers.statusCode,200);assert.ok(providers.json().providers.some((item:{id:string})=>item.id==="demo:relay"));
   const prompts=await app.inject({method:"GET",url:"/v1/prompts"});assert.equal(prompts.statusCode,200);assert.ok(prompts.json().some((item:{name:string})=>item.name==="chat"));
+  const prompt=await app.inject({method:"GET",url:"/v1/prompts/chat/001"});assert.equal(prompt.statusCode,200);assert.equal(prompt.json().name,"chat");assert.ok(prompt.json().content.length>20);
   const agents=await app.inject({method:"GET",url:"/v1/agents"});assert.equal(agents.statusCode,200);assert.ok(agents.json().some((item:{id:string})=>item.id==="planner-reviewer"));
   const artifact=await app.inject({method:"POST",url:"/v1/artifacts",payload:{sessionId,name:"notes.txt",mediaType:"text/plain",content:"artifact body"}});assert.equal(artifact.statusCode,201);assert.equal(artifact.json().name,"notes.txt");
   const replay=await app.inject({method:"POST",url:`/v1/traces/${chat.json().trace.id}/replay`});assert.equal(replay.statusCode,200);assert.notEqual(replay.json().trace.id,chat.json().trace.id);
@@ -58,6 +59,7 @@ test("control-plane endpoints expose sessions, providers, prompts, and completed
   const submitted=await app.inject({method:"POST",url:"/v1/jobs",payload:{type:"single",objective:"Return a short result",priority:"balanced"}});assert.equal(submitted.statusCode,202);const jobId=submitted.json().id;
   let job:{status:string}|undefined;for(let attempt=0;attempt<30;attempt+=1){await new Promise(resolve=>setTimeout(resolve,10));const response=await app.inject({method:"GET",url:`/v1/jobs/${jobId}`});job=response.json();if(job?.status==="succeeded")break;}
   assert.equal(job?.status,"succeeded");const artifacts=await app.inject({method:"GET",url:`/v1/artifacts?jobId=${jobId}`});assert.equal(artifacts.statusCode,200);assert.equal(artifacts.json().length,1);
+  const adhoc=await app.inject({method:"POST",url:"/v1/jobs",payload:{type:"adhoc",objective:"Create a concise answer",priority:"balanced",steps:[{id:"query",name:"Query",prompt:"Gather facts"},{id:"synthesize",name:"Synthesize",prompt:"Write the result"}]}});assert.equal(adhoc.statusCode,202);
   await app.close();
 });
 
