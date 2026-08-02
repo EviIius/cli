@@ -14,7 +14,10 @@
     "local:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-local-model.ps1",
     "fallback:start": "powershell -ExecutionPolicy Bypass -File scripts/start-local-failover.ps1",
     "db:migrate": "node scripts/migrate.mjs",
-    "eval": "pnpm --filter @relay/workers eval:smoke"
+    "eval": "pnpm --filter @relay/workers eval:smoke",
+    "security:secrets": "node scripts/scan-secrets.mjs",
+    "security:licenses": "node scripts/check-licenses.mjs",
+    "source:archive": "node scripts/create-source-archive.mjs"
   },
   "devDependencies": {
     "dotenv": "^16.5.0",

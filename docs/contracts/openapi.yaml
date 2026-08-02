@@ -1,0 +1,73 @@
+openapi: 3.1.1
+info:
+  title: Relay Control Plane API
+  version: 1.0.0
+  description: Tenant-scoped API for versioned workflows, governed runs, approvals, and model chat.
+servers: [{ url: / }]
+security: [{ sessionCookie: [] }]
+paths:
+  /v1/workflows:
+    get:
+      operationId: listWorkflows
+      responses: { "200": { description: Tenant workflows } }
+    post:
+      operationId: createWorkflow
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateWorkflow" } } } }
+      responses: { "201": { description: Workflow and starter draft }, "400": { $ref: "#/components/responses/Error" } }
+  /v1/workflows/{workflowId}/draft:
+    get:
+      operationId: getWorkflowDraft
+      parameters: [{ $ref: "#/components/parameters/WorkflowId" }]
+      responses: { "200": { description: Mutable draft, with ETag revision } }
+    put:
+      operationId: updateWorkflowDraft
+      parameters: [{ $ref: "#/components/parameters/WorkflowId" }, { name: If-Match, in: header, required: true, schema: { type: string, pattern: '^"rev-[0-9]+"$' } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDefinition" } } } }
+      responses: { "200": { description: Updated draft }, "412": { $ref: "#/components/responses/Error" }, "422": { $ref: "#/components/responses/Error" } }
+  /v1/workflows/{workflowId}/validate:
+    post:
+      operationId: validateWorkflow
+      parameters: [{ $ref: "#/components/parameters/WorkflowId" }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDefinition" } } } }
+      responses: { "200": { description: Structured graph diagnostics } }
+  /v1/workflows/{workflowId}/publish:
+    post:
+      operationId: publishWorkflow
+      parameters: [{ $ref: "#/components/parameters/WorkflowId" }, { $ref: "#/components/parameters/IdempotencyKey" }]
+      responses: { "201": { description: Immutable, content-addressed workflow version }, "422": { $ref: "#/components/responses/Error" } }
+  /v1/workflow-versions/{versionId}/runs:
+    post:
+      operationId: startWorkflowRun
+      parameters: [{ name: versionId, in: path, required: true, schema: { type: string, format: uuid } }, { $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: false, properties: { input: { type: object } } } } } }
+      responses: { "202": { description: Queued recoverable run } }
+  /v1/jobs/{jobId}/events:
+    get:
+      operationId: listRunEvents
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { "200": { description: Ordered CloudEvents for the run } }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: relay_session }
+  parameters:
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 200 } }
+    WorkflowId: { name: workflowId, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Error: { description: Stable error, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  schemas:
+    Error: { type: object, required: [code, error], properties: { code: { type: string }, error: { type: string }, details: {} } }
+    CreateWorkflow: { type: object, additionalProperties: false, required: [name], properties: { name: { type: string, minLength: 1, maxLength: 120 }, description: { type: string, maxLength: 2000 } } }
+    WorkflowDefinition:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, id, name, nodes, edges]
+      properties:
+        schemaVersion: { const: "1.0" }
+        id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string }
+        inputs: { type: object }
+        nodes: { type: array, minItems: 2, maxItems: 100, items: { type: object } }
+        edges: { type: array, maxItems: 200, items: { type: object } }
+        policies: { type: object }

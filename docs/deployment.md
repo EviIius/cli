@@ -16,7 +16,9 @@ For outage operation with no managed model dependency, use the Ollama overlay: `
 
 ## Kubernetes
 
-Build and push `infra/docker/api.Dockerfile` and `infra/docker/web.Dockerfile`, replace image references and the host in `infra/kubernetes`, and supply secrets through the cluster's secret manager. The templates include two replicas, health probes, resource limits, and API CPU autoscaling. PostgreSQL, Redis, and the OpenTelemetry collector are expected as managed or separately installed services.
+Build and push `infra/docker/api.Dockerfile` and `infra/docker/web.Dockerfile`, replace image references and the host in `infra/kubernetes`, and create `relay-secrets` through External Secrets or the cluster's secret manager. The repository intentionally contains no plausible Secret values. The templates include two replicas, TLS ingress, dedicated service accounts, disabled token mounts, health probes, resource limits, topology spreading, disruption budgets, default-deny network policy, and API CPU autoscaling.
+
+Label the namespace containing PostgreSQL/Redis with `relay/data-plane=true` and the telemetry namespace with `relay/monitoring=true`; otherwise the default-deny egress policy will correctly block them. Provider HTTPS egress is permitted only to public addresses. If a provider or managed database uses a private endpoint, add an explicit narrow CIDR or namespace policy before rollout. Your CNI must enforce NetworkPolicy.
 
 ## Private inference
 

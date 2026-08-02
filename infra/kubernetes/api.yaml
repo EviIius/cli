@@ -7,6 +7,13 @@ spec:
   template:
     metadata: { labels: { app: relay-api } }
     spec:
+      serviceAccountName: relay-api
+      automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: relay-api } }
       securityContext:
         {
           runAsNonRoot: true,
@@ -24,6 +31,7 @@ spec:
               "test -f /data/prompts/registry.json || cp -R /app/packages/prompts/. /data/prompts/",
             ]
           volumeMounts: [{ name: prompts, mountPath: /data/prompts }]
+          terminationMessagePolicy: FallbackToLogsOnError
       containers:
         - name: api
           image: relay-api:latest

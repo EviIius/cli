@@ -102,9 +102,9 @@ For disaster recovery rather than temporary failover, enable managed PostgreSQL 
 - Native SSE token streaming, transient retries, ordered fallback, capability/policy filtering, token usage, and cost accounting
 - PostgreSQL sessions, messages, traces, usage, policies, audit events, approvals, jobs, and artifacts with checksummed migrations
 - Signed authentication, tenant RBAC, per-tenant rate limits and budgets, input redaction, and retention purge controls
-- Persisted write-tool approvals and resumable single or planner–executor–reviewer workflows
+- Persisted exact-once write-tool approvals; resumable single, planner–reviewer, ad-hoc, and versioned graph workflows
 - Versioned prompt promotion, deterministic evaluation reports, OpenTelemetry export, CI, production containers, and Kubernetes/HPA manifests
-- Responsive operator console for chat, history, traces, approvals, workflows, prompts, usage, providers, policy, and audit activity
+- Responsive operator console plus React Flow workflow studio with draft ETags, graph validation, immutable publishing, run inspection, and a keyboard-friendly outline
 - Agent graph registry, trace replay, persisted eval dashboard, budget alerts, and text-file artifact attachments
 
-See [provider setup](docs/providers.md), [deployment](docs/deployment.md), [architecture](docs/architecture.md), and [security](docs/security.md).
+Machine-readable contracts live in [OpenAPI](docs/contracts/openapi.yaml) and [AsyncAPI](docs/contracts/asyncapi.yaml). See [provider setup](docs/providers.md), [deployment](docs/deployment.md), [architecture](docs/architecture.md), [security](docs/security.md), and [production readiness](docs/production-readiness.md).

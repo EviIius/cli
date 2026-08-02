@@ -7,6 +7,13 @@ spec:
   template:
     metadata: { labels: { app: relay-web } }
     spec:
+      serviceAccountName: relay-web
+      automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: relay-web } }
       containers:
         - name: web
           image: relay-web:latest
@@ -33,6 +40,9 @@ metadata:
   namespace: relay
   annotations: { nginx.ingress.kubernetes.io/proxy-read-timeout: "180" }
 spec:
+  tls:
+    - hosts: [relay.example.com]
+      secretName: relay-tls
   rules:
     - host: relay.example.com
       http:

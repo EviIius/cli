@@ -2,11 +2,13 @@ import { z } from "zod";
 
 export const toolSpecSchema = z.object({
   name: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/),
+  version:z.string().regex(/^[0-9]+\.[0-9]+\.[0-9]+$/).optional(),
   description: z.string().min(1),
   inputSchema: z.record(z.unknown()),
   mode: z.enum(["read", "write", "async"]),
   requiresApproval: z.boolean().optional(),
   timeoutMs: z.number().int().positive().max(120_000).optional(),
+  maximumOutputBytes:z.number().int().positive().max(10_485_760).optional(),
   authMode: z.enum(["none", "tenant", "service"]).optional()
 });
 export type ToolSpec = z.infer<typeof toolSpecSchema>;
@@ -37,6 +39,10 @@ export type ApprovalRecord = {
   toolName: string;
   input: unknown;
   status: "pending" | "approved" | "rejected";
+  operationKey?:string;
+  executionStatus?:"not_started"|"executing"|"succeeded"|"failed";
+  result?:unknown;
+  resumedAt?:string;
   requestedAt: string;
   resolvedAt?: string;
   resolvedBy?: string;

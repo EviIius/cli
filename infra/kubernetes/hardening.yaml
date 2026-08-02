@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: relay-api, namespace: relay }
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: relay-web, namespace: relay }
+automountServiceAccountToken: false
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: relay-api, namespace: relay }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: relay-api } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: relay-web, namespace: relay }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: relay-web } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny, namespace: relay }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: web-ingress-egress, namespace: relay }
+spec:
+  podSelector: { matchLabels: { app: relay-web } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 80 }]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: relay-api } } }]
+      ports: [{ protocol: TCP, port: 4100 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: api-ingress-egress, namespace: relay }
+spec:
+  podSelector: { matchLabels: { app: relay-api } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: relay-web } } }]
+      ports: [{ protocol: TCP, port: 4100 }]
+    - from: [{ namespaceSelector: { matchLabels: { relay/monitoring: "true" } } }]
+      ports: [{ protocol: TCP, port: 4100 }]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: [{ namespaceSelector: { matchLabels: { relay/data-plane: "true" } } }]
+      ports: [{ protocol: TCP, port: 5432 }, { protocol: TCP, port: 6379 }]
+    - to: [{ namespaceSelector: { matchLabels: { relay/monitoring: "true" } } }]
+      ports: [{ protocol: TCP, port: 4318 }]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports: [{ protocol: TCP, port: 443 }]

@@ -1,0 +1,32 @@
+asyncapi: 3.0.0
+info: { title: Relay Run Events, version: 1.0.0 }
+defaultContentType: application/json
+channels:
+  runEvents:
+    address: tenants/{tenantId}/jobs/{jobId}/events
+    parameters:
+      tenantId: { description: Authenticated tenant UUID }
+      jobId: { description: Workflow job UUID }
+    messages:
+      runEvent: { $ref: "#/components/messages/RunEvent" }
+operations:
+  receiveRunEvents:
+    action: receive
+    channel: { $ref: "#/channels/runEvents" }
+    messages: [{ $ref: "#/channels/runEvents/messages/runEvent" }]
+components:
+  messages:
+    RunEvent:
+      name: RunEvent
+      payload:
+        type: object
+        required: [specversion, id, source, type, subject, time, data]
+        properties:
+          specversion: { const: "1.0" }
+          id: { type: string, format: uuid }
+          source: { type: string }
+          type: { type: string, pattern: '^com\.relay\.' }
+          subject: { type: string }
+          time: { type: string, format: date-time }
+          datacontenttype: { const: application/json }
+          data: { type: object }

@@ -7,3 +7,15 @@ coverage/
 *.tsbuildinfo
 evals/reports/*.json
 .DS_Store
+.source-archives/
+*.zip
+*.tgz
+.pnpm-store/
+.cache/
+.vite/
+playwright-report/
+test-results/
+*.pem
+*.key
+*.p12
+*.pfx

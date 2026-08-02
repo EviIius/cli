@@ -1,12 +1,12 @@
 # Security model
 
 - Provider credentials are server-only environment secrets; `.env` is ignored and the UI never accepts keys.
-- Passwords use salted scrypt hashes. Session tokens are HMAC-signed, expire after eight hours, and include tenant and role claims.
+- Passwords use salted scrypt hashes. Session tokens are HMAC-signed with issuer/audience/session-version claims, expire after eight hours, and are delivered through `HttpOnly`, `Secure` production cookies.
 - Every tenant route checks the authenticated tenant. Owner/admin/builder/viewer roles restrict mutation and sensitive control-plane reads.
 - Provider/model allowlists, private-lane isolation, monthly budgets, and per-tenant rate limits are enforced before inference.
 - Tool input is JSON-schema validated. Write tools suspend in a persisted approval state and fail closed until an owner/admin decides.
 - Credential-shaped fields and bearer/key patterns are redacted before message and error persistence.
-- Retention purge removes old messages, completed approvals, usage, audit events, traces, and artifacts while preserving active dependencies.
+- Retention purge removes eligible messages, completed approvals, usage, traces, jobs, and artifacts while retaining the audit ledger. Export audit events to an append-only security sink for stronger tamper resistance.
 - Container and Kubernetes manifests run the API as non-root and Kubernetes drops Linux capabilities and uses a read-only root filesystem.
 
 ## Production checklist
@@ -19,4 +19,4 @@
 6. Rotate provider keys, authentication secrets, and database credentials on a schedule and after any exposure.
 7. Alert on authentication failures, budget rejects, provider error rate, approval age, job failures, and telemetry loss.
 
-The included authentication is suitable for a self-managed deployment. Enterprise SSO/OIDC, SCIM, KMS-backed envelope encryption, and a distributed queue are natural extensions for large installations.
+The included authentication is suitable for a small self-managed deployment. It is not a substitute for enterprise SSO, centralized revocation, MFA, or fine-grained relationship authorization. See `production-readiness.md` for the required OIDC/OpenFGA, object-storage, Temporal, and sandbox boundaries.

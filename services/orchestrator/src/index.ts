@@ -37,6 +37,7 @@ export class Orchestrator {
 
   async run(input: ChatRequest, events?: { onDelta?: (text: string) => void; agent?: AgentDefinition }): Promise<{ result: ChatResult; trace: Trace }> {
     const traceId = randomUUID();
+    const reservationId=`chat:${traceId}`;let reservationActive=false,reservedEstimate=0;
     const startedAt = new Date().toISOString();
     const trace: Trace = { id: traceId, tenantId: input.tenantId, sessionId: input.sessionId, startedAt, status: "running", spans: [] };
     const addSpan = (span: Omit<TraceSpan, "id" | "traceId" | "startedAt"> & { startedAt?: string }) => trace.spans.push({ id: randomUUID(), traceId, startedAt: span.startedAt ?? new Date().toISOString(), ...span });
@@ -51,6 +52,8 @@ export class Orchestrator {
       const routeStart = performance.now();
       const decisions = this.router.routes(input, policy);
       let decision = decisions[0]!;
+      const estimatedInputTokens=Math.ceil(JSON.stringify(input.messages).length/4),estimatedOutputTokens=4_096;reservedEstimate=Math.max(...decisions.map(item=>(estimatedInputTokens*item.adapter.estimatedInputCostPerMillion+estimatedOutputTokens*item.adapter.estimatedOutputCostPerMillion)/1_000_000));
+      if(!await this.store.reserveBudget(input.tenantId,reservationId,reservedEstimate,policy.monthlyBudgetUsd))throw new Error(`Tenant monthly budget of $${policy.monthlyBudgetUsd.toFixed(2)} does not have enough unreserved capacity`);reservationActive=true;
       addSpan({ name: "select model", kind: "router", status: "ok", durationMs: performance.now() - routeStart, attributes: { adapter: decision.adapter.id, reason: decision.reason, candidates: decisions.length } });
       const messages: ChatMessage[] = [...session.messages, ...input.messages];
       if(this.prompts&&!messages.some(message=>message.role==="system")){const prompt=await this.prompts.resolve(agent?.prompt.name??"chat",agent?.prompt.version);messages.unshift({role:"system",content:prompt.content});addSpan({name:`prompt ${prompt.name}`,kind:"policy",status:"ok",attributes:{version:prompt.version}});}
@@ -61,10 +64,10 @@ export class Orchestrator {
       const pendingApprovals:Array<{id:string;toolName:string}>=[];
       modelLoop: for (let step = 0; step < (agent?.maxSteps ?? 4); step += 1) {
         const modelStart = performance.now();
-        let invocationError: unknown;
+        let invocationError: unknown,streamCommitted=false;
         for (const candidate of [decision, ...decisions.filter((item) => item.adapter.id !== decision.adapter.id)]) {
-          try { result = await this.invoke(candidate.adapter, request, events?.onDelta); decision = candidate; invocationError = undefined; break; }
-          catch (error) { invocationError = error; addSpan({ name: `model ${candidate.adapter.id} failed`, kind: "model", status: "error", durationMs: performance.now() - modelStart, attributes: { adapter: candidate.adapter.id, error: safeError(error) } }); }
+          try { result = await this.invoke(candidate.adapter, request,events?.onDelta?(text)=>{streamCommitted=true;events.onDelta!(text);}:undefined); decision = candidate; invocationError = undefined; break; }
+          catch (error) { invocationError = error; addSpan({ name: `model ${candidate.adapter.id} failed`, kind: "model", status: "error", durationMs: performance.now() - modelStart, attributes: { adapter: candidate.adapter.id, error: safeError(error),streamCommitted } });if(streamCommitted)break; }
         }
         if (invocationError || !result) throw invocationError ?? new Error("All provider routes failed");
         addSpan({ name: `model ${decision.adapter.id}`, kind: "model", status: "ok", durationMs: performance.now() - modelStart, attributes: { provider: result.provider, model: result.model, step } });
@@ -74,7 +77,7 @@ export class Orchestrator {
           const execution = await this.tools.execute(call.name, call.arguments, { tenantId: input.tenantId, sessionId: input.sessionId, traceId, approved: false }, policy);
           addSpan({ name: `tool ${call.name}`, kind: "tool", status: execution.status === "failed" ? "error" : "ok", durationMs: execution.durationMs, attributes: { status: execution.status } });
           if(execution.status==="approval_required"){
-            const approval=await this.store.createApproval({tenantId:input.tenantId,sessionId:input.sessionId,traceId,toolCallId:call.id,toolName:call.name,input:call.arguments});
+            const approval=await this.store.createApproval({tenantId:input.tenantId,sessionId:input.sessionId,traceId,toolCallId:call.id,toolName:call.name,input:call.arguments,operationKey:`${traceId}:${call.id??`${step}:${call.name}`}`});
             pendingApprovals.push({id:approval.id,toolName:approval.toolName});
             await this.store.addAudit({tenantId:input.tenantId,actorId:input.metadata?.actorId,action:"approval.requested",resourceType:"approval",resourceId:approval.id,traceId,metadata:{toolName:call.name}});
             continue;
@@ -91,9 +94,11 @@ export class Orchestrator {
       trace.status = "ok";
       await this.store.saveTrace(trace);
       await this.store.addUsage({ id: randomUUID(), tenantId: input.tenantId, sessionId: input.sessionId, traceId, provider: result.provider, model: result.model, inputTokens: Math.ceil(result.usage?.inputTokens ?? 0), outputTokens: Math.ceil(result.usage?.outputTokens ?? 0), costUsd: result.usage?.costUsd ?? 0, createdAt: new Date().toISOString() });
+      await this.store.settleBudget(input.tenantId,reservationId,result.usage?.costUsd??0);reservationActive=false;
       await this.store.addAudit({ tenantId: input.tenantId, actorId: input.metadata?.actorId, action: "chat.completed", resourceType: "session", resourceId: input.sessionId, traceId, metadata: { provider: result.provider, model: result.model, agentId: agent?.id ?? "default" } });
       return { result, trace };
     } catch (error) {
+      if(reservationActive)await this.store.settleBudget(input.tenantId,reservationId,reservedEstimate);
       trace.status = "error";
       addSpan({ name: "orchestration error", kind: "request", status: "error", attributes: { error: safeError(error) } });
       await this.store.saveTrace(trace);
@@ -103,17 +108,15 @@ export class Orchestrator {
   }
 
   async resolveApproval(id:string,tenantId:string,actorId:string,status:"approved"|"rejected",reason?:string):Promise<{approval:import("@relay/contracts").ApprovalRecord;resumed?:Awaited<ReturnType<Orchestrator["run"]>>}>{
-    const existing=await this.store.approval(id);if(!existing||existing.tenantId!==tenantId)throw new Error("Approval not found");
-    const approval=await this.store.resolveApproval(id,status,actorId,reason);
+    const existing=await this.store.approval(tenantId,id);if(!existing)throw new Error("Approval not found");
+    const approval=await this.store.resolveApproval(tenantId,id,status,actorId,reason);
     await this.store.addAudit({tenantId,actorId,action:`approval.${status}`,resourceType:"approval",resourceId:id,traceId:approval.traceId,metadata:{toolName:approval.toolName,reason:reason??""}});
-    const remaining=(await this.store.listApprovals(tenantId,"pending")).filter(item=>item.sessionId===approval.sessionId);if(remaining.length)return{approval};
-    let content:unknown={status:"rejected",reason:reason??"Rejected by operator"};
-    if(status==="approved"){
-      const policy=this.policyFor?await this.policyFor(tenantId):await this.store.tenantPolicy(tenantId);
-      const execution=await this.tools.execute(approval.toolName,approval.input,{tenantId,sessionId:approval.sessionId,traceId:approval.traceId,approved:true},policy);
-      content=execution.status==="succeeded"?execution.output:{status:execution.status,error:execution.error};
-    }
-    const resumed=await this.run({tenantId,sessionId:approval.sessionId,priority:"balanced",messages:[{role:"tool",name:approval.toolName,toolCallId:approval.toolCallId,content}],metadata:{actorId}});
+    if(approval.toolName==="human.approval")return{approval};
+    const batch=(await this.store.listApprovals(tenantId)).filter(item=>item.traceId===approval.traceId).sort((a,b)=>a.requestedAt.localeCompare(b.requestedAt));if(batch.some(item=>item.status==="pending"))return{approval};
+    const policy=this.policyFor?await this.policyFor(tenantId):await this.store.tenantPolicy(tenantId),messages:ChatMessage[]=[];
+    for(const item of batch){let content:unknown;if(item.status==="rejected")content={status:"rejected",reason:item.reason??"Rejected by operator"};else{let completed=item;if((item.executionStatus??"not_started")==="not_started"&&await this.store.claimApprovalExecution(tenantId,item.id)){const execution=await this.tools.execute(item.toolName,item.input,{tenantId,sessionId:item.sessionId,traceId:item.traceId,approved:true},policy);content=execution.status==="succeeded"?execution.output:{status:execution.status,error:execution.error};completed=await this.store.completeApprovalExecution(tenantId,item.id,execution.status==="succeeded"?"succeeded":"failed",content);}else content=completed.result;if(content===undefined)return{approval};}messages.push({role:"tool",name:item.toolName,toolCallId:item.toolCallId,content});}
+    if(!await this.store.claimApprovalResume(tenantId,approval.traceId))return{approval};
+    const resumed=await this.run({tenantId,sessionId:approval.sessionId,priority:"balanced",messages,metadata:{actorId}});
     return{approval,resumed};
   }
 }

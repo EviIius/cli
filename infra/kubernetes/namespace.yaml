@@ -14,15 +14,4 @@ data:
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
   LOCAL_BASE_URL: disabled
   PROMPTS_DIR: /data/prompts
----
-apiVersion: v1
-kind: Secret
-metadata: { name: relay-secrets, namespace: relay }
-type: Opaque
-stringData:
-  AUTH_SECRET: replace-with-at-least-32-random-characters
-  DATABASE_URL: postgresql://replace-me
-  OPENAI_API_KEY: ""
-  ANTHROPIC_API_KEY: ""
-  MISTRAL_API_KEY: ""
-  QWEN_API_KEY: ""
+  CORS_ALLOWED_ORIGINS: https://relay.example.com

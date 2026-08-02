@@ -17,6 +17,8 @@ jobs:
           --health-timeout 3s --health-retries 10
     permissions:
       contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -27,6 +29,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm security:secrets
+      - run: pnpm audit --audit-level high
+      - run: pnpm security:licenses
+      - run: pnpm source:archive
       - run: pnpm db:migrate
         env: { DATABASE_URL: "postgresql://relay:relay@localhost:5432/relay" }
       - run: pnpm typecheck
@@ -37,3 +43,35 @@ jobs:
       - run: pnpm build
       - run: docker build -f infra/docker/api.Dockerfile -t relay-api:test .
       - run: docker build -f infra/docker/web.Dockerfile -t relay-web:test .
+      - name: Scan infrastructure configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infra
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: relay-api:test
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: relay-sbom.cdx.json
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-release-evidence
+          path: |
+            relay-sbom.cdx.json
+            .source-archives/relay-control-plane-source.zip
+      - name: Attest source archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.repository.visibility == 'public'
+        uses: actions/attest@v4
+        with:
+          subject-path: .source-archives/relay-control-plane-source.zip
