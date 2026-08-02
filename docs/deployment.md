@@ -2,7 +2,7 @@
 
 ## Managed hosting on Render
 
-The root `render.yaml` is the supported single-region managed deployment. It builds the API Dockerfile with the React console embedded, provisions private PostgreSQL, runs checksummed migrations as a pre-deploy command, uses `/ready` as the health check, generates `AUTH_SECRET`, prompts for `OPENAI_API_KEY`, and mounts a persistent prompt-registry disk. Create a Blueprint from the repository in Render and complete the first-user bootstrap only after the deployment is healthy.
+The root `render.yaml` is the supported single-region managed deployment. It builds the API Dockerfile with the React console embedded, provisions private PostgreSQL, runs checksummed migrations as a pre-deploy command, uses `/ready` as the health check, generates `AUTH_SECRET`, prompts for `OPENAI_API_KEY`, and mounts a persistent prompt-registry disk. Create a Blueprint from the repository in Render and complete the first-user bootstrap only after the deployment is healthy. Render's platform-provided `RENDER_EXTERNAL_URL` is used as the same-origin CORS fallback when an older Blueprint-managed service does not yet expose `CORS_ALLOWED_ORIGINS`; an explicit allowlist still takes precedence.
 
 For a disposable demo, select `render.free.yaml` as the Blueprint path. Because Render does not offer pre-deploy commands or persistent disks on Free web services, this variant runs idempotent migrations during startup and uses the image's bundled prompt registry. It will cold-start after idle periods, loses prompt-file changes on restart, and must be upgraded or migrated before its Free PostgreSQL database expires after 30 days.
 
