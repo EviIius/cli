@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - services/*
+  - packages/*
+  - packages/adapters/*
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
+  protobufjs: true

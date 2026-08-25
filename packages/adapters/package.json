@@ -1,0 +1,15 @@
+{
+  "name": "@relay/adapters",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./dist/index.js" } },
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": { "@relay/contracts": "workspace:*" },
+  "devDependencies": { "@types/node": "^22.15.32", "tsx": "^4.20.3", "typescript": "^5.8.3" }
+}

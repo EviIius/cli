@@ -1,0 +1,12 @@
+lanes:
+  fast:
+    candidates: [openai:fast, mistral:balanced, local:qwen3-8b, demo:relay]
+    prefer_low_cost: true
+  balanced:
+    candidates: [openai:balanced, anthropic:balanced, mistral:balanced, qwen:balanced, local:qwen3-8b, demo:relay]
+    require_tool_support: true
+  deep:
+    candidates: [openai:deep, anthropic:balanced, qwen:balanced, openai:balanced, mistral:balanced, local:qwen3-8b, demo:relay]
+  private:
+    candidates: [local:qwen3-8b, demo:relay]
+    require_self_hosted: true

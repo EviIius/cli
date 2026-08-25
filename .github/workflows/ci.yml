@@ -1,0 +1,76 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          { POSTGRES_USER: relay, POSTGRES_PASSWORD: relay, POSTGRES_DB: relay }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U relay" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm security:secrets
+      - run: pnpm audit --audit-level high
+      - run: pnpm security:licenses
+      - run: pnpm source:archive
+      - run: pnpm db:migrate
+        env: { DATABASE_URL: "postgresql://relay:relay@localhost:5432/relay" }
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:integration
+        env: { DATABASE_URL: "postgresql://relay:relay@localhost:5432/relay" }
+      - run: pnpm eval
+      - run: pnpm build
+      - run: docker build -f infra/docker/api.Dockerfile -t relay-api:test .
+      - run: docker build -f infra/docker/web.Dockerfile -t relay-web:test .
+      - name: Scan infrastructure configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infra
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: relay-api:test
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: relay-sbom.cdx.json
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-release-evidence
+          path: |
+            relay-sbom.cdx.json
+            .source-archives/relay-control-plane-source.zip
+      - name: Attest source archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.repository.visibility == 'public'
+        uses: actions/attest@v4
+        with:
+          subject-path: .source-archives/relay-control-plane-source.zip

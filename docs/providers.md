@@ -1,0 +1,80 @@
+# Provider and local-model setup
+
+Relay runs with the local demo adapter without credentials. Configure only the managed providers you intend to use; the router skips unconfigured providers.
+
+Never paste keys into the web app, source files, chat, screenshots, or committed configuration. Copy `.env.example` to `.env`, enter secrets there, and run `pnpm providers:verify`. This checks authentication without consuming model tokens. Then run `pnpm providers:verify -- --live` to send one minimal billable completion to each configured provider and verify quota plus model access. The `.env` file is ignored by Git.
+
+## OpenAI
+
+1. Create or select an API Platform project at <https://platform.openai.com/settings/organization/projects>.
+2. Add billing and set a project budget.
+3. Create a restricted project key at <https://platform.openai.com/api-keys>.
+4. Set `OPENAI_API_KEY` in `.env`.
+
+Relay uses the Responses API. Its default lanes are `gpt-5.6-luna` for fast traffic, `gpt-5.6-terra` for balanced traffic, and `gpt-5.6-sol` for deep work.
+
+## Anthropic
+
+1. Open <https://console.anthropic.com/settings/keys> and create a workspace key.
+2. Ensure the workspace has billing or credits.
+3. Set `ANTHROPIC_API_KEY` in `.env`.
+
+The default is the pinned `claude-sonnet-5` model ID.
+
+## Google Gemini
+
+1. Open <https://aistudio.google.com/apikey> and sign in with the Google account that owns the API project.
+2. Select **Create API key**, choose the intended Google Cloud project, and create the key.
+3. Copy `.env.example` to `.env` if needed, then set `GEMINI_API_KEY` in `.env`. Do not add quotation marks or commit the file.
+4. Leave `GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai` unless Google changes its official OpenAI-compatible endpoint.
+5. Run `pnpm providers:verify`, followed by `pnpm providers:verify -- --live` for one minimal billable completion.
+
+Relay exposes `gemini-3.5-flash-lite` as the fast route and `gemini-3.6-flash` as the balanced route by default. Override them with `GEMINI_FAST_MODEL` and `GEMINI_MODEL` if the API project does not have access to those IDs.
+
+## Mistral
+
+1. Activate Mistral Studio and open <https://console.mistral.ai/api-keys/>.
+2. Create an expiring workspace key.
+3. Set `MISTRAL_API_KEY` in `.env`.
+
+## Qwen / Alibaba Cloud Model Studio
+
+1. Activate Model Studio in the region where requests should run.
+2. Create a workspace API key and record the region-specific OpenAI-compatible base URL.
+3. Set `QWEN_API_KEY`, `QWEN_BASE_URL`, and `QWEN_MODEL` in `.env`.
+
+The key and base URL must come from the same region. New workspace keys may only be shown once.
+
+## Local Ollama
+
+On Windows, run:
+
+```powershell
+pnpm local:setup
+```
+
+This installs Ollama if needed, starts its local service, downloads `qwen3:8b`, and checks the OpenAI-compatible endpoint. Relay connects to `http://127.0.0.1:11434/v1`. Set `LOCAL_BASE_URL=disabled` to remove the local route.
+
+For this workstation's 8 GB GPU, `qwen3:8b` is the default. `gpt-oss:20b` is an optional higher-quality model but its approximately 14 GB quantized weights require CPU/RAM offload and will be substantially slower.
+
+To keep Ollama inside the same Docker network as the production-shaped stack, use:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml --profile app up -d --build
+```
+
+The one-shot pull service downloads the configured model before the API starts. Port 11435 exposes this containerized Ollama instance to the host without colliding with the Windows service on 11434.
+
+## Production vLLM
+
+On a Linux NVIDIA host, use the `local-model` Compose profile or Kubernetes deployment to expose vLLM's OpenAI-compatible server. Set `LOCAL_BASE_URL` to that server and `LOCAL_MODEL` to its served model ID. Gated Hugging Face models additionally require `HF_TOKEN` and acceptance of their model license.
+
+## Hosted open-weight endpoints
+
+Keep Relay on Render and run GPU inference separately. Any provider that exposes an OpenAI-compatible `/v1` endpoint can connect without placing model weights on Render:
+
+- Qwen: set `QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`, and `QWEN_SELF_HOSTED=true`.
+- Mistral: set `MISTRAL_API_KEY`, `MISTRAL_BASE_URL`, `MISTRAL_MODEL`, and `MISTRAL_SELF_HOSTED=true`.
+- Gemma 4: set `GEMMA_API_KEY`, `GEMMA_BASE_URL`, `GEMMA_MODEL`, and `GEMMA_SELF_HOSTED=true`.
+
+Runpod Serverless vLLM endpoints use a base URL shaped like `https://api.runpod.ai/v2/ENDPOINT_ID/openai/v1`. Hugging Face Inference Endpoints can also run vLLM and scale to zero. Each model normally has its own endpoint; add the corresponding variables to Render's Environment page and redeploy Relay. Never put an endpoint key in `render.yaml` or commit it to `.env.example`.

@@ -1,0 +1,28 @@
+{
+  "name": "relay-control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
+    "test:integration": "pnpm --filter @relay/orchestrator test",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean",
+    "providers:verify": "node scripts/verify-providers.mjs",
+    "local:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-local-model.ps1",
+    "fallback:start": "powershell -ExecutionPolicy Bypass -File scripts/start-local-failover.ps1",
+    "db:migrate": "node scripts/migrate.mjs",
+    "eval": "pnpm --filter @relay/workers eval:smoke",
+    "security:secrets": "node scripts/scan-secrets.mjs",
+    "security:licenses": "node scripts/check-licenses.mjs",
+    "source:archive": "node scripts/create-source-archive.mjs"
+  },
+  "devDependencies": {
+    "dotenv": "^16.5.0",
+    "pg": "^8.16.3",
+    "turbo": "^2.5.5",
+    "typescript": "^5.8.3"
+  }
+}

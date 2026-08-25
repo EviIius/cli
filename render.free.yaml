@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: relay-control-plane-free
+    runtime: docker
+    region: virginia
+    plan: free
+    dockerfilePath: ./infra/docker/api.Dockerfile
+    dockerContext: .
+    healthCheckPath: /ready
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: NODE_ENV
+        value: production
+      - key: SERVE_WEB
+        value: "true"
+      - key: PROMPTS_DIR
+        value: /app/packages/prompts
+      - key: AUTH_MODE
+        value: required
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://relay-control-plane-free.onrender.com
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: relay-postgres-free
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: LOCAL_BASE_URL
+        value: disabled
+      - key: OTEL_SDK_DISABLED
+        value: "true"
+      - key: RATE_LIMIT_MAX
+        value: "60"
+      - key: RATE_LIMIT_WINDOW
+        value: 1 minute
+
+databases:
+  - name: relay-postgres-free
+    region: virginia
+    plan: free
+    databaseName: relay
+    user: relay
+    ipAllowList: []
